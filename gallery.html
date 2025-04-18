@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gallery</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    h2 { margin-top: 0; }
+    .images { display: flex; flex-wrap: wrap; gap: 10px; }
+    .images img {
+      max-width: 200px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Hình ảnh từ mã QR</h2>
+  <div class="images" id="imageGallery"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const gallery = document.getElementById("imageGallery");
+    const urls = [];
+
+    for (const [key, value] of params.entries()) {
+      if (key.startsWith("img")) {
+        urls.push(decodeURIComponent(value));
+      }
+    }
+
+    if (!urls.length) {
+      gallery.innerHTML = "<p>Không tìm thấy ảnh nào.</p>";
+    } else {
+      gallery.innerHTML = urls
+        .map(u => `<img src="${u}" alt="Image">`)
+        .join("");
+    }
+  </script>
+
+</body>
+</html>
