@@ -2,98 +2,132 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Tạo QR theo nhóm tên ảnh</title>
+  <title>Upload & Gallery (One‑Page)</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    img { max-width: 150px; margin: 5px; border-radius: 6px; }
-    .qr-block { 
-      margin-bottom: 40px; 
-      border-bottom: 1px solid #ccc; 
-      background: #f9f9f9;
-      border-radius: 10px;
-      padding: 15px;
-    }
-    .qr-block h4 { margin-top: 0; }
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    #uploadSection, #gallerySection { margin-top: 20px; }
+    #gallerySection { display: none; }
+    img { max-width: 200px; margin: 5px; border-radius: 6px; }
+    .qr-block { margin-top: 20px; background: #fff; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
+    .qr-block h4 { margin: 0 0 10px; }
+    button { margin-bottom: 15px; padding: 6px 12px; border-radius: 4px; border: none; background: #007bff; color: #fff; cursor: pointer; }
+    button:hover { background: #0056b3; }
   </style>
 </head>
 <body>
 
-  <h2>Chọn nhiều ảnh (gom theo tên gốc, bỏ số cuối)</h2>
-  <input type="file" id="imageInput" accept="image/*" multiple />
-  <div id="qrContainer"></div>
+  <h1 id="pageTitle">Upload & Create QR</h1>
+
+  <!-- UPLOAD MODE -->
+  <div id="uploadSection">
+    <input type="file" id="imageInput" accept="image/*" multiple />
+    <div id="qrContainer"></div>
+  </div>
+
+  <!-- GALLERY MODE -->
+  <div id="gallerySection">
+    <button id="backBtn">← Back to Upload</button>
+    <h2>Gallery</h2>
+    <div id="imageGallery"></div>
+  </div>
 
   <script>
-    const cloudName   = 'dh2bxlkxm';
+  document.addEventListener("DOMContentLoaded", () => {
+    const cloudName    = 'dh2bxlkxm';
     const uploadPreset = 'taomaqr';
 
-    // Loại bỏ phần số cuối của filename, rồi trim khoảng trắng
-    function normalizeFilename(filename) {
-      // 1) Bỏ ext
-      const dotIndex = filename.lastIndexOf('.');
-      const nameOnly = dotIndex >= 0 ? filename.slice(0, dotIndex) : filename;
-      // 2) Loại bỏ dãy số liên tiếp ở cuối
-      return nameOnly.replace(/\d+$/, '').trim();
-    }
+    const uploadSection  = document.getElementById('uploadSection');
+    const gallerySection = document.getElementById('gallerySection');
+    const pageTitle      = document.getElementById('pageTitle');
+    const qrContainer    = document.getElementById('qrContainer');
+    const imageGallery   = document.getElementById('imageGallery');
+    const backBtn        = document.getElementById('backBtn');
 
-    document.getElementById("imageInput")
-      .addEventListener("change", async function (event) {
-        const files = Array.from(event.target.files);
-        const qrContainer = document.getElementById("qrContainer");
-        qrContainer.innerHTML = "";
+    // Lấy tất cả param bắt đầu bằng "img"
+    const params    = new URLSearchParams(window.location.search);
+    const imgParams = [...params.keys()].filter(k => k.startsWith('img'));
 
-        if (!files.length) {
-          return alert("Vui lòng chọn ít nhất 1 ảnh.");
-        }
+    if (imgParams.length) {
+      // --- GALLERY MODE ---
+      uploadSection.style.display  = 'none';
+      gallerySection.style.display = 'block';
+      pageTitle.textContent        = 'Gallery';
 
-        // 1) Nhóm theo tên gốc đã normalize
-        const groups = {};
-        for (const file of files) {
-          const key = normalizeFilename(file.name);
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(file);
-        }
+      imgParams.sort().forEach(key => {
+        const url = decodeURIComponent(params.get(key));
+        const img = document.createElement('img');
+        img.src = url;
+        imageGallery.appendChild(img);
+      });
 
-        // 2) Với mỗi nhóm, upload & tạo QR
-        for (const baseName in groups) {
-          const group = groups[baseName];
-          const urls = [];
+      backBtn.addEventListener('click', () => {
+        window.location = window.location.pathname;
+      });
 
-          // upload từng file trong nhóm
-          for (const file of group) {
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("upload_preset", uploadPreset);
-            const res  = await fetch(
-              `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-              { method: "POST", body: fd }
-            );
-            const data = await res.json();
-            urls.push(data.secure_url);
+    } else {
+      // --- UPLOAD MODE ---
+      gallerySection.style.display = 'none';
+
+      function normalize(name) {
+        // bỏ đuôi .ext
+        let base = name.replace(/\.\w+$/, '');
+        // loại bỏ dãy số cuối cùng
+        base = base.replace(/\d+$/, '');
+        return base.trim();
+      }
+
+      document.getElementById('imageInput')
+        .addEventListener('change', async (e) => {
+          const files = Array.from(e.target.files);
+          qrContainer.innerHTML = '';
+          if (!files.length) return alert('Chọn ít nhất 1 ảnh.');
+
+          // Gom nhóm theo tên gốc
+          const groups = {};
+          for (const f of files) {
+            const key = normalize(f.name);
+            (groups[key] = groups[key]||[]).push(f);
           }
 
-          // build query string img1=...&img2=...
-          const query = urls
-            .map((u,i) => `img${i+1}=${encodeURIComponent(u)}`)
-            .join("&");
-          const link = `gallery.html?${query}`;
+          // Với mỗi nhóm, upload & tạo QR
+          for (const baseName in groups) {
+            const urls = [];
+            for (const f of groups[baseName]) {
+              const fd = new FormData();
+              fd.append('file', f);
+              fd.append('upload_preset', uploadPreset);
+              const res = await fetch(
+                `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+                { method: 'POST', body: fd }
+              );
+              const data = await res.json();
+              urls.push(data.secure_url);
+            }
 
-          // tạo canvas QR
-          const canvas = document.createElement("canvas");
-          await QRCode.toCanvas(canvas, link);
+            // build params img1=..&img2=..
+            const query = urls.map((u,i) =>
+              `img${i+1}=${encodeURIComponent(u)}`).join('&');
+            // ensure absolute URL
+            const link = `${window.location.origin}${window.location.pathname}?${query}`;
 
-          // hiển thị block
-          const block = document.createElement("div");
-          block.className = "qr-block";
-          block.innerHTML = `
-            <h4>${baseName} (${group.length} ảnh)</h4>
-            <div>${urls.map(u => `<img src="${u}">`).join("")}</div>
-            <p><a href="${link}" target="_blank">${link}</a></p>
-          `;
-          block.appendChild(canvas);
-          qrContainer.appendChild(block);
-        }
-      });
+            // tạo QR
+            const canvas = document.createElement('canvas');
+            await QRCode.toCanvas(canvas, link);
+
+            // hiển thị
+            const block = document.createElement('div');
+            block.className = 'qr-block';
+            block.innerHTML = `
+              <h4>${baseName} — ${urls.length} ảnh</h4>
+              <p><a href="${link}" target="_blank">${link}</a></p>
+            `;
+            block.appendChild(canvas);
+            qrContainer.appendChild(block);
+          }
+        });
+    }
+  });
   </script>
 
 </body>
