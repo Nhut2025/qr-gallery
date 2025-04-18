@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tạo QR theo nhóm tên ảnh</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    img { max-width: 150px; margin: 5px; border-radius: 6px; }
+    .qr-block { 
+      margin-bottom: 40px; 
+      border-bottom: 1px solid #ccc; 
+      background: #f9f9f9;
+      border-radius: 10px;
+      padding: 15px;
+    }
+    .qr-block h4 { margin-top: 0; }
+  </style>
+</head>
+<body>
+
+  <h2>Chọn nhiều ảnh (gom theo tên gốc, bỏ số cuối)</h2>
+  <input type="file" id="imageInput" accept="image/*" multiple />
+  <div id="qrContainer"></div>
+
+  <script>
+    const cloudName   = 'dh2bxlkxm';
+    const uploadPreset = 'taomaqr';
+
+    // Loại bỏ phần số cuối của filename, rồi trim khoảng trắng
+    function normalizeFilename(filename) {
+      // 1) Bỏ ext
+      const dotIndex = filename.lastIndexOf('.');
+      const nameOnly = dotIndex >= 0 ? filename.slice(0, dotIndex) : filename;
+      // 2) Loại bỏ dãy số liên tiếp ở cuối
+      return nameOnly.replace(/\d+$/, '').trim();
+    }
+
+    document.getElementById("imageInput")
+      .addEventListener("change", async function (event) {
+        const files = Array.from(event.target.files);
+        const qrContainer = document.getElementById("qrContainer");
+        qrContainer.innerHTML = "";
+
+        if (!files.length) {
+          return alert("Vui lòng chọn ít nhất 1 ảnh.");
+        }
+
+        // 1) Nhóm theo tên gốc đã normalize
+        const groups = {};
+        for (const file of files) {
+          const key = normalizeFilename(file.name);
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(file);
+        }
+
+        // 2) Với mỗi nhóm, upload & tạo QR
+        for (const baseName in groups) {
+          const group = groups[baseName];
+          const urls = [];
+
+          // upload từng file trong nhóm
+          for (const file of group) {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("upload_preset", uploadPreset);
+            const res  = await fetch(
+              `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+              { method: "POST", body: fd }
+            );
+            const data = await res.json();
+            urls.push(data.secure_url);
+          }
+
+          // build query string img1=...&img2=...
+          const query = urls
+            .map((u,i) => `img${i+1}=${encodeURIComponent(u)}`)
+            .join("&");
+          const link = `gallery.html?${query}`;
+
+          // tạo canvas QR
+          const canvas = document.createElement("canvas");
+          await QRCode.toCanvas(canvas, link);
+
+          // hiển thị block
+          const block = document.createElement("div");
+          block.className = "qr-block";
+          block.innerHTML = `
+            <h4>${baseName} (${group.length} ảnh)</h4>
+            <div>${urls.map(u => `<img src="${u}">`).join("")}</div>
+            <p><a href="${link}" target="_blank">${link}</a></p>
+          `;
+          block.appendChild(canvas);
+          qrContainer.appendChild(block);
+        }
+      });
+  </script>
+
+</body>
+</html>
